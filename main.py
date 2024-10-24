@@ -19,7 +19,6 @@ DATA_FILE = 'user_dictionaries.json'
 
 class LearningWord(StatesGroup):  # LearningWord представляет группу состояний для процесса изучения слов.
     word = State()
-    user_answer = State()
 
 
 def load_data():
@@ -60,15 +59,15 @@ async def help_to_user(message: types.Message):
     await message.answer("To add a word to the dictionary, write to the bot /add_word, and then, in the same message, "
                          "separated by a space, the word itself and its translation.")
     await message.answer("To delete a word from the dictionary, write to the bot /delete_word, and then, in the same "
-                         "message, separated by a space, the word itself.")
+                         "message, the word itself.")
     await message.answer("To delete only one of the meanings of a word from the dictionary, write to the bot "
-                         "/delete_meaning, and then, in the same message, the word itself and its meaning that you "
-                         "want to delete.")
+                         "/delete_meaning, and then, in the same message, separated by a space, the word itself and "
+                         "its meaning that you want to delete.")
     await message.answer("To view your dictionary in alphabetical order, write to the bot /my_dict.")
     await message.answer("To start learning a word from the dictionary, write to the bot /learn. In the next message, "
                          "write the word you would like to learn. The bot will ask you to translate the word using "
-                         "the interval repetition technique for better memorization: after an hour, after a day, "
-                         "after 3 days, after 1 week and after 2 weeks.")
+                         "the interval repetition technique for better memorization: after a minute, after 2 minutes, "
+                         "after an hour, after a day, after 3 days, after 1 week and after 2 weeks.")
 
 
 # добавляет слово в словарь пользователя, обрабатывая сообщение вида "/add_word <слово> <перевод>"
@@ -82,7 +81,7 @@ async def add(message: types.Message):
     # проверка корректности ввода
     data = message.text.split()
     if len(data) != 3:
-        await message.answer("Please write a word and its meaning in the format: /add <word> <meaning>")
+        await message.answer("Please write a word and its meaning in the format: /add_word <word> <meaning>")
         return
 
     word, meaning = data[1], data[2]
@@ -180,13 +179,17 @@ async def send_delayed_messages(message: types.Message, state: FSMContext):
     await message.answer("Enter the word you want to learn.")
 
 
-# Обрабатывает ввод слова, сохраняя его в состоянии, и проверяет, есть ли это слово в словаре пользователя. Если слово
+# обрабатывает ввод слова, сохраняя его в состоянии, и проверяет, есть ли это слово в словаре пользователя. Если слово
 # найдено, запускается процесс интервального повторения с заданными задержками.
 @dp.message(LearningWord.word)
 async def get_word(message: types.Message, state: FSMContext):
     user_id = str(message.from_user.id)
-
     await state.update_data(word=message.text)
+    await state.clear()
+
+    global user_word
+
+    user_word = message.text
 
     if message.text not in user_dictionaries[user_id]:
         await message.answer("The word is not found in your dictionary.")
@@ -194,31 +197,35 @@ async def get_word(message: types.Message, state: FSMContext):
 
     await message.answer("The word has been successfully added to the study!")
 
-    for delay in [3600, 86400, 259200, 604800, 1209600]:  # 1 час, 1 день, 3 дня, 1 неделя, 2 недели
-        await asyncio.sleep(delay)
-        await message.answer(f'Let\'s repeat the vocabulary! How to translate "{message.text}"?')
-        await state.set_state(LearningWord.user_answer)
+    asyncio.create_task(repeat(user_id, message.text))
 
-    await state.clear()
+
+# отправляет сообщения для интервального повторения слова
+async def repeat(user_id, word):
+    for delay in [60, 120, 3600, 86400, 259200, 604800, 1209600]:
+        # 1 минута, 2 минуты 1 час, 1 день, 3 дня, 1 неделя, 2 недели
+        await asyncio.sleep(delay)
+        await bot.send_message(user_id, f'Let\'s repeat the vocabulary! How to translate "{word}"? Enter your answer '
+                                        f'using the command /check.')
 
 
 # проверяет ответ пользователя и сообщает правильные варианты перевода, если ответ не верен
 # если слово было удалено из словаря пользователя, функция уведомляет об этом
-@dp.message(LearningWord.user_answer)
-async def check_answer(message: types.Message, state: FSMContext):
+@dp.message(Command('check'))
+async def check_answer(message: types.Message, state=FSMContext):
     user_id = str(message.from_user.id)
-    await state.update_data(user_answer=message.text)
-    data = await state.get_data()
-    word = data.get('word')
 
-    if not word or word not in user_dictionaries[user_id]:
+    data = message.text.split()
+    user_ans = data[-1]
+
+    if not user_word or user_word not in user_dictionaries[user_id]:
         await message.answer("The word has been removed from the dictionary.")
         await state.clear()
         return
 
-    correct_answer = user_dictionaries[user_id][word]
+    correct_answer = user_dictionaries[user_id][user_word]
 
-    if message.text.lower() in [elem.lower() for elem in correct_answer]:
+    if user_ans.lower() in [elem.lower() for elem in correct_answer]:
         await message.answer("Well done! This is the correct answer.")
     else:
         await message.answer(f"You almost guessed it! Correct answers: {', '.join(correct_answer)}.")
