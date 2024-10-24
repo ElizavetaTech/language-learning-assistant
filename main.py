@@ -8,16 +8,16 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.storage.memory import MemoryStorage
 from config import TOKEN, OAUTH_TOKEN, FOLDER_ID, API_URL
 
-
-ALLOWED_UPDATES = ['message', 'edited_message', 'callback_query', 'message_reaction', 'inline_query']
+ALLOWED_UPDATES = ['message']
 
 bot = Bot(token=TOKEN)
 dp = Dispatcher(storage=MemoryStorage())
 
 DATA_FILE = 'user_dictionaries.json'
+# в этом файле содержаться личные словари всех пользователей в виде словаря {<user_id>: {<слово>: [<варианты перевода>]}
 
 
-class LearningWord(StatesGroup):
+class LearningWord(StatesGroup):  # LearningWord представляет группу состояний для процесса изучения слов.
     word = State()
     user_answer = State()
 
@@ -27,14 +27,17 @@ def load_data():
         return json.load(f)
 
 
+# запись обновлений словарей пользователя в файл JSON
 def save_data(data):
     with open(DATA_FILE, 'w') as f:
         json.dump(data, f)
 
 
+# загрузка словарей пользователей, чтобы они не очищались при перезапуске бота
 user_dictionaries = load_data()
 
 
+# Получает IAM токен для доступа к API Яндекс.Облака
 async def get_iam_token():
     async with aiohttp.ClientSession() as session:
         async with session.post('https://iam.api.cloud.yandex.net/iam/v1/tokens', json={'yandexPassportOauthToken':
@@ -54,6 +57,7 @@ async def help_to_user(message: types.Message):
     await message.answer("...see you soon")
 
 
+# добавляет слово в словарь пользователя, обрабатывая сообщение вида "/add_word <слово> <перевод>"
 @dp.message(Command('add_word'))
 async def add(message: types.Message):
     user_id = str(message.from_user.id)
@@ -61,6 +65,7 @@ async def add(message: types.Message):
     if user_id not in user_dictionaries:
         user_dictionaries[user_id] = {}
 
+    # проверка корректности ввода
     data = message.text.split()
     if len(data) != 3:
         await message.answer("Please write a word and its meaning in the format: /add <word> <meaning>")
@@ -79,6 +84,7 @@ async def add(message: types.Message):
         await message.answer("The new word has been successfully added!")
 
 
+# удаляет слово из словаря пользователя, обрабатывая сообщение вида "/delete_word <слово>"
 @dp.message(Command('delete_word'))
 async def delete_word(message: types.Message):
     user_id = str(message.from_user.id)
@@ -89,6 +95,7 @@ async def delete_word(message: types.Message):
 
     data = message.text.split()
 
+    # проверка корректности ввода
     if len(data) != 2:
         await message.answer("Please specify the word you want to delete.")
         return
@@ -105,6 +112,7 @@ async def delete_word(message: types.Message):
             "dictionary using the /my_dict command.")
 
 
+# удаляет значение слова из словаря пользователя, обрабатывая сообщение вида "/delete_word <слово> <значение>"
 @dp.message(Command('delete_meaning'))
 async def delete_meaning(message: types.Message):
     user_id = str(message.from_user.id)
@@ -115,6 +123,7 @@ async def delete_meaning(message: types.Message):
 
     data = message.text.split()
 
+    # проверка корректности ввода
     if len(data) != 3:
         await message.answer("Please write the word and its meaning that you want to delete.")
         return
@@ -133,6 +142,7 @@ async def delete_meaning(message: types.Message):
         await message.answer("This word does not exist in your dictionary.")
 
 
+# выводит словарь пользователя, обрабатывая сообщение вида "/my_dict"
 @dp.message(Command('my_dict'))
 async def view_dict(message: types.Message):
     user_id = str(message.from_user.id)
@@ -144,12 +154,16 @@ async def view_dict(message: types.Message):
         await message.answer(f"Your dictionary:\n{dict_items}")
 
 
+# обрабатывает команду "/learn" и запрашивает у пользователя слово для изучения, устанавливая состояние машины
+# состояний для ожидания ввода слова
 @dp.message(Command('learn'))
 async def send_delayed_messages(message: types.Message, state: FSMContext):
     await state.set_state(LearningWord.word)
     await message.answer("Enter the word you want to learn.")
 
 
+# Обрабатывает ввод слова, сохраняя его в состоянии, и проверяет, есть ли это слово в словаре пользователя. Если слово
+# найдено, запускается процесс интервального повторения с заданными задержками.
 @dp.message(LearningWord.word)
 async def get_word(message: types.Message, state: FSMContext):
     user_id = str(message.from_user.id)
@@ -170,6 +184,8 @@ async def get_word(message: types.Message, state: FSMContext):
     await state.clear()
 
 
+# проверяет ответ пользователя и сообщает правильные варианты перевода, если ответ не верен
+# если слово было удалено из словаря пользователя, функция уведомляет об этом
 @dp.message(LearningWord.user_answer)
 async def check_answer(message: types.Message, state: FSMContext):
     user_id = str(message.from_user.id)
@@ -190,13 +206,16 @@ async def check_answer(message: types.Message, state: FSMContext):
         await message.answer(f"You almost guessed it! Correct answers: {', '.join(correct_answer)}.")
 
 
+# извлекает текст сообщения, получает IAM токен, формирует запрос к Yandex GPT и отправляет его. Затем она
+# обрабатывает ответ и отправляет его обратно пользователю.
 @dp.message()
 async def process_message(message: types.Message):
     user_text = message.text
 
+    # получение IAM токен
     iam_token = await get_iam_token()
 
-    # Отправляем запрос к Yandex GPT
+    # отправка запроса к Yandex GPT
     data = {
         "modelUri": f"gpt://{FOLDER_ID}/yandexgpt",
         "completionOptions": {"temperature": 0.3, "maxTokens": 1000},
@@ -211,13 +230,13 @@ async def process_message(message: types.Message):
         async with session.post(API_URL, json=data, headers={"Authorization": f"Bearer {iam_token}"}) as response:
             response.raise_for_status()
             result = await response.json()
-            answer = result.get('result', {}).get('alternatives', [{}])[0].get('message', {}).get('text', 'Error '
-                                                                                                          'receiving '
-                                                                                                          'the '
-                                                                                                          'response')
+            answer = result.get('result', {}).get('alternatives', [{}])[0].get('message', {}).get('text',
+                                                                                                  'Error receiving '
+                                                                                                  'the response')
     await message.reply(answer)
 
 
+# инициализации бота и запуска процесса опроса
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot, allowed_updates=ALLOWED_UPDATES)
