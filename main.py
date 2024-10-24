@@ -17,7 +17,7 @@ DATA_FILE = 'user_dictionaries.json'
 # в этом файле содержаться личные словари всех пользователей в виде словаря {<user_id>: {<слово>: [<варианты перевода>]}
 
 
-class LearningWord(StatesGroup):  # LearningWord представляет группу состояний для процесса изучения слов.
+class LearningWord(StatesGroup):  # LearningWord представляет группу состояний для процесса изучения слов
     word = State()
     user_answer = State()
 
@@ -162,8 +162,8 @@ async def send_delayed_messages(message: types.Message, state: FSMContext):
     await message.answer("Enter the word you want to learn.")
 
 
-# Обрабатывает ввод слова, сохраняя его в состоянии, и проверяет, есть ли это слово в словаре пользователя. Если слово
-# найдено, запускается процесс интервального повторения с заданными задержками.
+# обрабатывает ввод слова, сохраняя его в состоянии, и проверяет, есть ли это слово в словаре пользователя. Если слово
+# найдено, запускается процесс интервального повторения с заданными задержками
 @dp.message(LearningWord.word)
 async def get_word(message: types.Message, state: FSMContext):
     user_id = str(message.from_user.id)
@@ -207,12 +207,12 @@ async def check_answer(message: types.Message, state: FSMContext):
 
 
 # извлекает текст сообщения, получает IAM токен, формирует запрос к Yandex GPT и отправляет его. Затем она
-# обрабатывает ответ и отправляет его обратно пользователю.
+# обрабатывает ответ и отправляет его обратно пользователю
 @dp.message()
 async def process_message(message: types.Message):
     user_text = message.text
 
-    # получение IAM токен
+    # получение IAM токена
     iam_token = await get_iam_token()
 
     # отправка запроса к Yandex GPT
@@ -236,7 +236,7 @@ async def process_message(message: types.Message):
     await message.reply(answer)
 
 
-# инициализации бота и запуска процесса опроса
+# инициализация бота и запуск процесса опроса
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot, allowed_updates=ALLOWED_UPDATES)
