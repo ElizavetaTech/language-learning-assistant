@@ -67,7 +67,8 @@ async def help_to_user(message: types.Message):
     await message.answer("To start learning a word from the dictionary, write to the bot /learn. In the next message, "
                          "write the word you would like to learn. The bot will ask you to translate the word using "
                          "the interval repetition technique for better memorization: after a minute, after 2 minutes, "
-                         "after an hour, after a day, after 3 days, after 1 week and after 2 weeks.")
+                         "after an hour, after a day, after 3 days, after 1 week and after 2 weeks.\nUnfortunately, "
+                         "at this stage of development, the bot can only teach you one word at a time.")
 
 
 # добавляет слово в словарь пользователя, обрабатывая сообщение вида "/add_word <слово> <перевод>"
