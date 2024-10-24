@@ -17,7 +17,7 @@ DATA_FILE = 'user_dictionaries.json'
 # в этом файле содержаться личные словари всех пользователей в виде словаря {<user_id>: {<слово>: [<варианты перевода>]}
 
 
-class LearningWord(StatesGroup):  # LearningWord представляет группу состояний для процесса изучения слов
+class LearningWord(StatesGroup):  # LearningWord представляет группу состояний для процесса изучения слов.
     word = State()
     user_answer = State()
 
@@ -54,7 +54,21 @@ async def start(message: types.Message):
 
 @dp.message(Command('help'))
 async def help_to_user(message: types.Message):
-    await message.answer("...see you soon")
+    await message.answer("You can ask the bot any question related to language learning, theory and grammar. In "
+                         "addition, it is your smart dictionary, in which you can write down words and their "
+                         "translation, as well as memorize them thanks to the interval repetition system.")
+    await message.answer("To add a word to the dictionary, write to the bot /add_word, and then, in the same message, "
+                         "separated by a space, the word itself and its translation.")
+    await message.answer("To delete a word from the dictionary, write to the bot /delete_word, and then, in the same "
+                         "message, separated by a space, the word itself.")
+    await message.answer("To delete only one of the meanings of a word from the dictionary, write to the bot "
+                         "/delete_meaning, and then, in the same message, the word itself and its meaning that you "
+                         "want to delete.")
+    await message.answer("To view your dictionary in alphabetical order, write to the bot /my_dict.")
+    await message.answer("To start learning a word from the dictionary, write to the bot /learn. In the next message, "
+                         "write the word you would like to learn. The bot will ask you to translate the word using "
+                         "the interval repetition technique for better memorization: after an hour, after a day, "
+                         "after 3 days, after 1 week and after 2 weeks.")
 
 
 # добавляет слово в словарь пользователя, обрабатывая сообщение вида "/add_word <слово> <перевод>"
@@ -135,6 +149,10 @@ async def delete_meaning(message: types.Message):
             user_dictionaries[user_id][word].remove(meaning)
             save_data(user_dictionaries)
             await message.answer("The meaning has been successfully deleted.")
+            # если после удаления значения у слова нет ни одного перевода в словаре, то оно удаляется из словаря
+            if len(user_dictionaries[user_id][word]) == 0:
+                del user_dictionaries[user_id][word]
+                save_data(user_dictionaries)
         else:
             await message.answer("This meaning is not in the dictionary. Please check the spelling. You can view your "
                                  "dictionary using the /my_dict command.")
@@ -142,7 +160,7 @@ async def delete_meaning(message: types.Message):
         await message.answer("This word does not exist in your dictionary.")
 
 
-# выводит словарь пользователя, обрабатывая сообщение вида "/my_dict"
+# выводит отсортированный словарь пользователя, обрабатывая сообщение вида "/my_dict"
 @dp.message(Command('my_dict'))
 async def view_dict(message: types.Message):
     user_id = str(message.from_user.id)
@@ -162,8 +180,8 @@ async def send_delayed_messages(message: types.Message, state: FSMContext):
     await message.answer("Enter the word you want to learn.")
 
 
-# обрабатывает ввод слова, сохраняя его в состоянии, и проверяет, есть ли это слово в словаре пользователя. Если слово
-# найдено, запускается процесс интервального повторения с заданными задержками
+# Обрабатывает ввод слова, сохраняя его в состоянии, и проверяет, есть ли это слово в словаре пользователя. Если слово
+# найдено, запускается процесс интервального повторения с заданными задержками.
 @dp.message(LearningWord.word)
 async def get_word(message: types.Message, state: FSMContext):
     user_id = str(message.from_user.id)
@@ -207,12 +225,12 @@ async def check_answer(message: types.Message, state: FSMContext):
 
 
 # извлекает текст сообщения, получает IAM токен, формирует запрос к Yandex GPT и отправляет его. Затем она
-# обрабатывает ответ и отправляет его обратно пользователю
+# обрабатывает ответ и отправляет его обратно пользователю.
 @dp.message()
 async def process_message(message: types.Message):
     user_text = message.text
 
-    # получение IAM токена
+    # получение IAM токен
     iam_token = await get_iam_token()
 
     # отправка запроса к Yandex GPT
@@ -236,7 +254,7 @@ async def process_message(message: types.Message):
     await message.reply(answer)
 
 
-# инициализация бота и запуск процесса опроса
+# инициализации бота и запуска процесса опроса
 async def main():
     await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot, allowed_updates=ALLOWED_UPDATES)
